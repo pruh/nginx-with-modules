@@ -30,7 +30,7 @@ jobs:
 
       - name: Check if update available
         id: check
-        uses: giggio/docker-image-update-checker@v2.0.0
+        uses: giggio/docker-image-update-checker@v2
         with:
           base-image: library/nginx:1.20.2
           image: pruh/nginx-with-modules:alpine

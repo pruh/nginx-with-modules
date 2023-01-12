@@ -22,7 +22,7 @@ jobs:
 
       - name: Docker Image Update Checker
         id: baseupdatecheck
-        uses: lucacome/docker-image-update-checker@v1.1.1
+        uses: giggio/docker-image-update-checker@v2.0.0
         with:
           base-image: ${{ env.BASE_IMAGE }}:${{ env.IMAGE_TAG }}
           image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}

@@ -19,9 +19,16 @@ jobs:
     steps:
 
       - uses: actions/checkout@v3
+      
+      - name: Check if update available
+        id: check_test
+        uses: giggio/docker-image-update-checker@v2
+        with:
+          base-image: library/nginx:1.21.0
+          image: library/nginx:latest
 
       - name: Docker Image Update Checker
-        id: baseupdatecheck
+        id: check
         uses: giggio/docker-image-update-checker@v2.0.0
         with:
           base-image: ${{ env.BASE_IMAGE }}:${{ env.IMAGE_TAG }}
@@ -29,7 +36,7 @@ jobs:
           verbose: true
 
       - name: Debug
-        run: echo ${{ steps.baseupdatecheck.outputs }}
+        run: echo ${{ steps.check.outputs }}
           
       - name: Get base image latest version
         id: version
@@ -40,11 +47,11 @@ jobs:
                 sed 's/-alpine//' |
                 sort --version-sort |
                 tail -n 1
-        if: steps.baseupdatecheck.outputs.needs-updating == 'true'
+        if: steps.check.outputs.needs-updating == 'true'
 
       - name: Print version
         run: echo ${{ steps.version.outputs }}
-        if: steps.baseupdatecheck.outputs.needs-updating == 'true'
+        if: steps.check.outputs.needs-updating == 'true'
 
       # only execute subsequent steps if an update is actually NEEDED.
       # unfortunately we need to add an if-condition to all steps now
@@ -57,7 +64,7 @@ jobs:
 #         with:
 #           username: ${{ secrets.DOCKERHUB_USERNAME }}
 #           password: ${{ secrets.DOCKERHUB_TOKEN }}
-#         if: steps.baseupdatecheck.outputs.needs-updating == 'true'
+#         if: steps.check.outputs.needs-updating == 'true'
 
 #       - name: Build and push Docker images
 #         uses: docker/build-push-action@v3.2.0
@@ -68,4 +75,4 @@ jobs:
 #             - ${{ env.IMAGE_NAME }}:latest
 #             - ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 #             - ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.id }}-${{ env.BASE_IMAGE_TAG }}
-#         if: steps.baseupdatecheck.outputs.needs-updating == 'true'
+#         if: steps.check.outputs.needs-updating == 'true'

@@ -7,7 +7,7 @@ on:
     branches: [ "master" ]
     
 env:
-  BASE_IMAGE: nginx
+  BASE_IMAGE: library/nginx
   IMAGE_TAG: alpine
   IMAGE_NAME: pruh/nginx-with-modules
 
@@ -41,7 +41,7 @@ jobs:
       - name: Get base image latest version
         id: version
         run: | 
-              curl -L --fail "https://hub.docker.com/v2/repositories/library/${{ env.BASE_IMAGE }}/tags/?page_size=100" | 
+              curl -L --fail "https://hub.docker.com/v2/repositories/${{ env.BASE_IMAGE }}/tags/?page_size=100" | 
                 jq '.results | .[] | .name' -r |
                 grep -Po "(\d+\.)+\d+(-${{ env.IMAGE_TAG }})" |
                 sed 's/-alpine//' |

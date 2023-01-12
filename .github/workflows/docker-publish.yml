@@ -53,15 +53,15 @@ jobs:
         if: steps.check.outputs.needs-updating == 'true'
         
       - name: Debug
-        run: echo '${{ env.IMAGE_NAME }}:latest'; \n echo '${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}'; \n echo '${{ env.IMAGE_NAME }}:${{ steps.version.outputs.nginx_version }}-${{ env.BASE_IMAGE_TAG }}'
+        run: echo '${{ env.IMAGE_NAME }}:latest''
 
       - name: Build and push Docker images
         uses: docker/build-push-action@v3.2.0
         with:
           context: "${{ github.workspace }}"
-          push: true
+          push: false
           tags: |
             ${{ env.IMAGE_NAME }}:latest
             ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-            ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.nginx_version }}-${{ env.BASE_IMAGE_TAG }}
-        if: false #steps.check.outputs.needs-updating == 'true'
+            ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.nginx_version }}-${{ env.IMAGE_TAG }}
+        if: steps.check.outputs.needs-updating == 'true'

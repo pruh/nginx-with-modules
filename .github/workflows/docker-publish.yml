@@ -26,13 +26,14 @@ jobs:
         with:
           base-image: library/nginx:1.21.0
           image: library/nginx:latest
+          verbose: true
 
       - name: Check if update available
         id: check
         uses: giggio/docker-image-update-checker@v2.0.0
         with:
-          base-image: ${{ env.BASE_IMAGE }}:${{ env.IMAGE_TAG }}
-          image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          base-image: library/nginx:1.20.2
+          image: pruh/nginx-with-modules:alpine
           verbose: true
 
       - name: Debug

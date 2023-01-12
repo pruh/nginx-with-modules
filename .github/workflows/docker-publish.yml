@@ -5,18 +5,35 @@ on:
     - cron: '0 1 * * *'
   pull_request:
     branches: [ "master" ]
-
+    
 env:
-  # Use docker.io for Docker Hub if empty
-  REGISTRY: ghcr.io
-  # github.repository as <account>/<repo>
-  IMAGE_NAME: ${{ github.repository }}
-
+  BASE_IMAGE: nginx:alpine
+  IMAGE_NAME: pruh/nginx-with-modules:alpine
 
 jobs:
 
+  variables:
+    name: Get versions of base images
+    
+    runs-on: ubuntu-latest
+    
+    outputs:
+      alpine_version: ${{ steps.versions.outputs.matrix }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set NGINX versions
+        id: versions
+        run: |
+          nginx_alpine=library/nginx:$(grep -m1 "FROM.*nginx:.*alpine" < build/Dockerfile | awk -F"[ :]" '{print $3}')
+          echo "::set-output name=matrix::[{\"version\": \"${nginx_alpine}\", \"distro\": \"alpine\"}]"
+
   build:
     runs-on: ubuntu-latest
+
     steps:
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -26,11 +43,19 @@ jobs:
         id: baseupdatecheck
         uses: lucacome/docker-image-update-checker@v1.1.1
         with:
-          base-image: nginx:alpine
-          image: pruh/nginx-with-modules # update for your image
+          base-image: ${{ env.BASE_IMAGE }}
+          image: ${{ env.IMAGE_NAME }}
+          verbose: true
           
       - name: Debug
         run: echo {{ steps.baseupdatecheck.outputs }}
+    
+      - name: Set NGINX alpine version
+        id: version
+        run: |
+          nginx_alpine=library/nginx:$(grep -m1 "FROM.*nginx:.*alpine" < build/Dockerfile | awk -F"[ :]" '{print $3}')
+          echo "::set-output name=matrix::[{\"version\": \"${nginx}\", \"distro\": \"debian\"}, {\"version\": \"${nginx_alpine}\", \"distro\": \"alpine\"}, {\"version\": \"${nginx_ubi}\", \"distro\": \"ubi\"}]"
+
 
       # only execute subsequent steps if an update is actually NEEDED.
       # unfortunately we need to add an if-condition to all steps now
@@ -50,5 +75,5 @@ jobs:
 #         with:
 #           context: "${{ github.workspace }}"
 #           push: true
-#           tags: pruh/nginx-with-modules # update for your image
+#           tags: pruh/nginx-with-modules
 #         if: steps.baseupdatecheck.outputs.needs-updating == 'true'

@@ -1,0 +1,62 @@
+name: Docker
+
+on:
+  schedule:
+    - cron: '0 1 * * *'
+    
+env:
+  BASE_IMAGE: library/nginx
+  IMAGE_TAG: alpine
+  IMAGE_NAME: pruh/nginx-with-modules
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v3
+
+      - name: Check if update available
+        id: check
+        uses: giggio/docker-image-update-checker@v2.0.1
+        with:
+          base-image: ${{ env.BASE_IMAGE }}:${{ env.IMAGE_TAG }}
+          image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          verbose: true
+
+      # only execute subsequent steps if an update is actually NEEDED.
+      # unfortunately we need to add an if-condition to all steps now
+      # because a clean exit can't be triggered within a job it seems
+      # (a cancellation is NOT the same and triggers a failure email)
+      # see also https://github.com/actions/runner/issues/662
+
+      - name: Get base image latest version
+        id: version
+        run: | 
+              echo nginx_version=$(curl -L --fail "https://hub.docker.com/v2/repositories/${{ env.BASE_IMAGE }}/tags/?page_size=100" | 
+                jq '.results | .[] | .name' -r |
+                grep -Po "(\d+\.)+\d+(-${{ env.IMAGE_TAG }})" |
+                sed 's/-alpine//' |
+                sort --version-sort |
+                tail -n 1) >> $GITHUB_OUTPUT
+        if: steps.check.outputs.needs-updating == 'true'
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v2.1.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+        if: steps.check.outputs.needs-updating == 'true'
+
+      - name: Build and push Docker images
+        uses: docker/build-push-action@v3.2.0
+        with:
+          context: "${{ github.workspace }}"
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.nginx_version }}-${{ env.IMAGE_TAG }}
+        if: steps.check.outputs.needs-updating == 'true'

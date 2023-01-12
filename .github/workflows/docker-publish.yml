@@ -19,39 +19,28 @@ jobs:
     steps:
 
       - uses: actions/checkout@v3
-      
-      - name: Check if update available Debug
-        id: check_test
-        uses: giggio/docker-image-update-checker@v2
-        with:
-          base-image: library/nginx:1.21.0
-          image: library/nginx:latest
-          verbose: true
 
       - name: Check if update available
         id: check
-        uses: giggio/docker-image-update-checker@v2
+        uses: giggio/docker-image-update-checker@v2.0.1
         with:
-          base-image: library/nginx:1.20.2
-          image: pruh/nginx-with-modules:alpine
+          base-image: ${{ env.BASE_IMAGE }}:${{ env.IMAGE_TAG }}
+          image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           verbose: true
 
-      - name: Debug
-        run: echo ${{ steps.check.outputs }}
-          
       - name: Get base image latest version
         id: version
         run: | 
-              curl -L --fail "https://hub.docker.com/v2/repositories/${{ env.BASE_IMAGE }}/tags/?page_size=100" | 
+              echo nginx_version=$(curl -L --fail "https://hub.docker.com/v2/repositories/${{ env.BASE_IMAGE }}/tags/?page_size=100" | 
                 jq '.results | .[] | .name' -r |
                 grep -Po "(\d+\.)+\d+(-${{ env.IMAGE_TAG }})" |
                 sed 's/-alpine//' |
                 sort --version-sort |
-                tail -n 1
+                tail -n 1) >> $GITHUB_OUTPUT
         if: steps.check.outputs.needs-updating == 'true'
 
       - name: Print version
-        run: echo ${{ steps.version.outputs }}
+        run: echo ${{ steps.version.outputs.nginx_version }}
         if: steps.check.outputs.needs-updating == 'true'
 
       # only execute subsequent steps if an update is actually NEEDED.

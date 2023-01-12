@@ -53,7 +53,7 @@ jobs:
         if: steps.check.outputs.needs-updating == 'true'
         
       - name: Debug
-        run: echo '${{ env.IMAGE_NAME }}:latest''
+        run: echo '${{ env.IMAGE_NAME }}:latest'; echo '${{ env.BASE_IMAGE }}:latest'
 
       - name: Build and push Docker images
         uses: docker/build-push-action@v3.2.0

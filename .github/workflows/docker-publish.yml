@@ -51,15 +51,12 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
         if: steps.check.outputs.needs-updating == 'true'
-        
-      - name: Debug
-        run: echo '${{ env.IMAGE_NAME }}:latest'; echo '${{ env.BASE_IMAGE }}:latest'
 
       - name: Build and push Docker images
         uses: docker/build-push-action@v3.2.0
         with:
           context: "${{ github.workspace }}"
-          push: false
+          push: true
           tags: |
             ${{ env.IMAGE_NAME }}:latest
             ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}

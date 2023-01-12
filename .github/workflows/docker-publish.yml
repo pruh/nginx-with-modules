@@ -3,9 +3,6 @@ name: Docker
 on:
   schedule:
     - cron: '0 1 * * *'
-  push:
-    branches: [ "master" ]
-    tags: [ "v*" ]
   pull_request:
     branches: [ "master" ]
 

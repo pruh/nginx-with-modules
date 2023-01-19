@@ -3,6 +3,11 @@ name: Docker
 on:
   schedule:
     - cron: '0 1 * * *'
+  
+  pull_request:
+    branches: [ "master" ]
+  push:
+    branches: [ "debug_rebuilds" ]
     
 env:
   BASE_IMAGE: library/nginx
@@ -41,14 +46,16 @@ jobs:
                 sed 's/-alpine//' |
                 sort --version-sort |
                 tail -n 1) >> $GITHUB_OUTPUT
-        if: steps.check.outputs.needs-updating == 'true'
+        if: false
+        #if: steps.check.outputs.needs-updating == 'true'
 
       - name: Login to DockerHub
         uses: docker/login-action@v2.1.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-        if: steps.check.outputs.needs-updating == 'true'
+        if: false
+        #if: steps.check.outputs.needs-updating == 'true'
 
       - name: Build and push Docker images
         uses: docker/build-push-action@v3.2.0
@@ -59,4 +66,5 @@ jobs:
             ${{ env.IMAGE_NAME }}:latest
             ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
             ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.nginx_version }}-${{ env.IMAGE_TAG }}
-        if: steps.check.outputs.needs-updating == 'true'
+        if: false
+        #if: steps.check.outputs.needs-updating == 'true'

@@ -27,8 +27,10 @@ jobs:
         id: check
         uses: giggio/docker-image-update-checker@v2.0.1
         with:
-          base-image: ${{ env.BASE_IMAGE }}:${{ env.IMAGE_TAG }}
-          image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          #base-image: ${{ env.BASE_IMAGE }}:${{ env.IMAGE_TAG }}
+          #image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          base-image: nginx:alpine
+          image: pruh/nginx-with-modules:alpine
           verbose: true
 
       # only execute subsequent steps if an update is actually NEEDED.

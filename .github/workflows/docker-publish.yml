@@ -61,4 +61,4 @@ jobs:
             ${{ env.IMAGE_NAME }}:latest
             ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
             ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.nginx_version }}-${{ env.IMAGE_TAG }}
-        if: false #steps.check.outputs.needs-updating == 'true'
+        if: steps.check.outputs.needs-updating == 'true'

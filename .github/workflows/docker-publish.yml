@@ -29,8 +29,8 @@ jobs:
         with:
           #base-image: ${{ env.BASE_IMAGE }}:${{ env.IMAGE_TAG }}
           #image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          base-image: nginx:alpine
-          image: pruh/nginx-with-modules:alpine
+          base-image: nginx:1.23.3-alpine
+          image: pruh/nginx-with-modules:1.23.3-alpine
           verbose: true
 
       # only execute subsequent steps if an update is actually NEEDED.

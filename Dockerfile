@@ -1,4 +1,4 @@
-FROM nginx:1.23.3-alpine AS builder
+FROM nginx:alpine AS builder
 
 # nginx:alpine contains NGINX_VERSION environment variable, like so:
 # ENV NGINX_VERSION 1.23.3
@@ -42,7 +42,7 @@ RUN CONFARGS=$(nginx -V 2>&1 | sed -n -e 's/^.*arguments: //p') \
   ./configure --with-compat $CONFARGS --add-dynamic-module=$NGX_DEVEL_KIT_DIR --add-dynamic-module=$SET_MISC_DIR && \
   make modules
 
-FROM nginx:1.23.3-alpine
+FROM nginx:alpine
 
 # Extract the dynamic modules from the builder image
 COPY --from=builder /usr/src/nginx/nginx-${NGINX_VERSION}/objs/*_module.so /etc/nginx/modules/

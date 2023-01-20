@@ -25,7 +25,7 @@ jobs:
 
       - name: Check if update available
         id: check
-        uses: lucacome/docker-image-update-checker@v1
+        uses: lucacome/docker-image-update-checker@v1.1.1
 #        uses: giggio/docker-image-update-checker@v2.0.1
         with:
           #base-image: ${{ env.BASE_IMAGE }}:${{ env.IMAGE_TAG }}

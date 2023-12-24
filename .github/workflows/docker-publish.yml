@@ -12,6 +12,7 @@ env:
   IMAGE_TAG: alpine
   IMAGE_NAME: pruh/nginx-with-modules
   ACTIONS_STEP_DEBUG: true
+  ACTIONS_RUNNER_DEBUG: true
 
 jobs:
 

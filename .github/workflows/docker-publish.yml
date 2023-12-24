@@ -36,6 +36,12 @@ jobs:
       # (a cancellation is NOT the same and triggers a failure email)
       # see also https://github.com/actions/runner/issues/662
 
+      - name: Debug get base image latest version
+        id: version_debug
+        run: | 
+              echo nginx_version=$(curl -L --fail "https://hub.docker.com/v2/repositories/${{ env.BASE_IMAGE }}/tags/?page_size=100")
+        if: steps.check.outputs.needs-updating == 'true'
+
       - name: Get base image latest version
         id: version
         run: | 

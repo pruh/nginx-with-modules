@@ -23,11 +23,10 @@ jobs:
 
       - name: Check if update available
         id: check
-        uses: giggio/docker-image-update-checker@v2
+        uses: lucacome/docker-image-update-checker@v1.2.0
         with:
           base-image: ${{ env.BASE_IMAGE }}:${{ env.IMAGE_TAG }}
           image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          verbose: true
 
       # only execute subsequent steps if an update is actually NEEDED.
       # unfortunately we need to add an if-condition to all steps now

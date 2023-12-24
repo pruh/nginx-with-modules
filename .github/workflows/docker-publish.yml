@@ -11,6 +11,7 @@ env:
   BASE_IMAGE: library/nginx
   IMAGE_TAG: alpine
   IMAGE_NAME: pruh/nginx-with-modules
+  ACTIONS_STEP_DEBUG: true
 
 jobs:
 

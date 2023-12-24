@@ -11,8 +11,6 @@ env:
   BASE_IMAGE: library/nginx
   IMAGE_TAG: alpine
   IMAGE_NAME: pruh/nginx-with-modules
-  ACTIONS_STEP_DEBUG: true
-  ACTIONS_RUNNER_DEBUG: true
 
 jobs:
 
@@ -25,7 +23,7 @@ jobs:
 
       - name: Check if update available
         id: check
-        uses: lucacome/docker-image-update-checker@v1.1.1
+        uses: giggio/docker-image-update-checker@v2
         with:
           base-image: ${{ env.BASE_IMAGE }}:${{ env.IMAGE_TAG }}
           image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
@@ -35,12 +33,6 @@ jobs:
       # because a clean exit can't be triggered within a job it seems
       # (a cancellation is NOT the same and triggers a failure email)
       # see also https://github.com/actions/runner/issues/662
-
-      - name: Debug get base image latest version
-        id: version_debug
-        run: | 
-              echo nginx_version=$(curl -L --fail "https://hub.docker.com/v2/repositories/${{ env.BASE_IMAGE }}/tags/?page_size=100")
-        if: steps.check.outputs.needs-updating == 'true'
 
       - name: Get base image latest version
         id: version

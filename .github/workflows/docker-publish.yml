@@ -23,7 +23,7 @@ jobs:
 
       - name: Check if update available
         id: check
-        uses: lucacome/docker-image-update-checker@v1.1.1
+        uses: lucacome/docker-image-update-checker@v1
         with:
           base-image: ${{ env.BASE_IMAGE }}:${{ env.IMAGE_TAG }}
           image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
@@ -38,7 +38,7 @@ jobs:
         id: version
         run: | 
               echo nginx_version=$(curl -L --fail "https://hub.docker.com/v2/repositories/${{ env.BASE_IMAGE }}/tags/?page_size=100" | 
-                jq '.results | .[] | .name' -r |
+                jq '.results | .[]? | .name' -r |
                 grep -Po "(\d+\.)+\d+(-${{ env.IMAGE_TAG }})" |
                 sed 's/-alpine//' |
                 sort --version-sort |

@@ -129,8 +129,9 @@ replace_exactly_once() {
 
   sed -i -E "s|$pattern|$replacement|" "$DOCKERFILE"
 
-  matches=$(awk -v expected="$expected" \
-    '$0 == expected { count++ } END { print count + 0 }' "$DOCKERFILE")
+  matches=$(EXPECTED_LINE="$expected" awk \
+    '$0 == ENVIRON["EXPECTED_LINE"] { count++ } END { print count + 0 }' \
+    "$DOCKERFILE")
   if [[ "$matches" != 1 ]]; then
     echo "Failed to write exactly one Dockerfile line: $expected" >&2
     exit 1

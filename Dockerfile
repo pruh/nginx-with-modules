@@ -31,7 +31,8 @@ RUN apk add --no-cache --virtual .build-deps \
   geoip-dev
 
 # Reuse same cli arguments as the nginx:alpine image used to build
-RUN CONFARGS=$(nginx -V 2>&1 | sed -n -e 's/^.*arguments: //p') \
+RUN CONFARGS="$(nginx -V 2>&1 | sed -n -e 's/^.*arguments: //p')" && \
+  test -n "$CONFARGS" && \
   mkdir -p /usr/src/nginx && \
   tar -zxC /usr/src/nginx -f nginx.tar.gz && \
   tar -xzvf "${NGX_DEVEL_KIT_FILE}" && \
@@ -39,7 +40,8 @@ RUN CONFARGS=$(nginx -V 2>&1 | sed -n -e 's/^.*arguments: //p') \
   tar -xzvf $SET_MISC_FILE && \
   SET_MISC_DIR="$(pwd)/set-misc-nginx-module-${SET_MISC_VERSION}" && \
   cd /usr/src/nginx/nginx-$NGINX_VERSION && \
-  ./configure --with-compat $CONFARGS --add-dynamic-module=$NGX_DEVEL_KIT_DIR --add-dynamic-module=$SET_MISC_DIR && \
+  eval "set -- $CONFARGS" && \
+  ./configure "$@" --add-dynamic-module="$NGX_DEVEL_KIT_DIR" --add-dynamic-module="$SET_MISC_DIR" && \
   make modules
 
 FROM nginx:alpine

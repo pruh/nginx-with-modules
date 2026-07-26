@@ -61,3 +61,30 @@ and revision labels, an SBOM, and BuildKit provenance attestations.
 Base image or module updates are made as reviewed commits. When updating an
 input, update its immutable reference and checksum together, then run the smoke
 test before merging.
+
+## Automatic Nginx Updates
+
+The daily `Update nginx` workflow compares `nginx:alpine-slim` with the pinned
+manifest. It verifies the matching nginx source archive against an allowlist of
+official release-key fingerprints and updates the source checksum and Alpine
+build-package pins. If anything changed, it creates a content-addressed pull
+request, waits for its required checks, and squash-merges the verified head.
+
+The Docker Official Images `nginx` repository is the trust root for the base
+filesystem and its version metadata; the updater does not independently verify
+image signatures. The corresponding nginx source archive is independently
+verified with the official release keys before its checksum is updated.
+
+The updater uses a GitHub App so its pull requests trigger the normal validation
+workflow. Configure the repository with:
+
+- A GitHub App installed only on this repository, with `Actions: Read`,
+  `Checks: Read`, `Commit statuses: Read`, `Contents: Read and write`, and
+  `Pull requests: Read and write` permissions.
+- Repository variable `NGINX_UPDATE_APP_CLIENT_ID` containing the App client ID.
+- Repository secret `NGINX_UPDATE_APP_PRIVATE_KEY` containing its private key.
+- A `master` ruleset requiring pull requests, branches to be up to date, and
+  the Docker `validate` job.
+
+The dedicated App identity keeps update pull requests separate from the
+workflow's default `GITHUB_TOKEN` and ensures they run the normal PR checks.

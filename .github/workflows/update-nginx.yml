@@ -1,0 +1,248 @@
+name: Update nginx
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-nginx
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        with:
+          driver-opts: image=moby/buildkit@sha256:2f5adac4ecd194d9f8c10b7b5d7bceb5186853db1b26e5abd3a657af0b7e26ec
+
+      - name: Update pinned inputs
+        id: update
+        run: scripts/update-nginx.sh
+
+      - name: Create updater token
+        if: steps.update.outputs.changed == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.NGINX_UPDATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.NGINX_UPDATE_APP_PRIVATE_KEY }}
+          permission-actions: read
+          permission-checks: read
+          permission-contents: write
+          permission-pull-requests: write
+          permission-statuses: read
+
+      - name: Create update pull request
+        if: steps.update.outputs.changed == 'true'
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          BRANCH: ${{ steps.update.outputs.branch }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          NGINX_VERSION: ${{ steps.update.outputs.nginx_version }}
+        run: |
+          BASE_OID=$(git rev-parse HEAD)
+          APP_BOT="${APP_SLUG}[bot]"
+          PR_FIELDS=author,baseRefName,baseRefOid,files,headRefName,headRefOid,isCrossRepository,number,state,url
+          if [[ ! "$APP_SLUG" =~ ^[A-Za-z0-9-]+$ ]]; then
+            echo "Invalid GitHub App slug: $APP_SLUG" >&2
+            exit 1
+          fi
+
+          validate_pr() {
+            jq -e \
+              --arg app_bot "$APP_BOT" \
+              --arg branch "$BRANCH" \
+              '.author.login == $app_bot and
+               .baseRefName == "master" and
+               .headRefName == $branch and
+               (.headRefOid | test("^[0-9a-f]{40}$")) and
+               (.isCrossRepository == false) and
+               (.files | length == 1 and .[0].path == "Dockerfile")' \
+              <<< "$1" >/dev/null || {
+                echo "Refusing unexpected pull request metadata" >&2
+                jq . <<< "$1" >&2
+                exit 1
+              }
+
+            PR_BASE_OID=$(jq -r .baseRefOid <<< "$1")
+            PR_HEAD_OID=$(jq -r .headRefOid <<< "$1")
+            PR_NUMBER=$(jq -r .number <<< "$1")
+            PR_STATE=$(jq -r .state <<< "$1")
+            PR_URL=$(jq -r .url <<< "$1")
+          }
+
+          branch_matches() {
+            local expected_head=$1
+            local fetched_head
+            local -a changed_files=()
+
+            git fetch --no-tags origin "refs/heads/$BRANCH" || return 1
+            fetched_head=$(git rev-parse FETCH_HEAD) || return 1
+            mapfile -t changed_files < <(git diff --name-only HEAD...FETCH_HEAD)
+            [[ "$fetched_head" == "$expected_head" ]] &&
+              (( ${#changed_files[@]} == 1 )) &&
+              [[ "${changed_files[0]:-}" == Dockerfile ]] &&
+              [[ "$(git rev-parse FETCH_HEAD:Dockerfile)" == "$(git hash-object Dockerfile)" ]]
+          }
+
+          validate_branch() {
+            if ! branch_matches "$1"; then
+              echo "Refusing unexpected remote branch: $BRANCH" >&2
+              exit 1
+            fi
+          }
+
+          refresh_pr() {
+            local pr_json
+
+            pr_json=$(gh pr view \
+              --repo "$GITHUB_REPOSITORY" \
+              "$1" \
+              --json "$PR_FIELDS")
+            validate_pr "$pr_json"
+          }
+
+          ensure_current_branch() {
+            local old_head
+
+            if [[ "$PR_BASE_OID" != "$BASE_OID" ]]; then
+              echo "The base branch changed during the updater run" >&2
+              exit 1
+            fi
+
+            validate_branch "$PR_HEAD_OID"
+            if git merge-base --is-ancestor "$BASE_OID" FETCH_HEAD; then
+              return
+            fi
+
+            old_head=$PR_HEAD_OID
+            gh api \
+              --method PUT \
+              -H "Accept: application/vnd.github+json" \
+              "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/update-branch" \
+              -f "expected_head_sha=$old_head" >/dev/null
+
+            for _ in {1..30}; do
+              sleep 2
+              refresh_pr "$PR_URL"
+              if [[ "$PR_HEAD_OID" != "$old_head" ]]; then
+                if branch_matches "$PR_HEAD_OID" &&
+                  git merge-base --is-ancestor "$BASE_OID" FETCH_HEAD; then
+                  return
+                fi
+              fi
+            done
+
+            echo "Timed out waiting for GitHub to update $BRANCH" >&2
+            exit 1
+          }
+
+          merge_after_checks() {
+            local checks
+            local expected_head=$PR_HEAD_OID
+            local found_checks=false
+
+            for _ in {1..60}; do
+              checks=$(gh pr checks \
+                --repo "$GITHUB_REPOSITORY" \
+                --required \
+                --json bucket \
+                "$PR_URL" 2>/dev/null) || true
+              if jq -e 'length > 0' <<< "$checks" >/dev/null 2>&1; then
+                found_checks=true
+                break
+              fi
+              sleep 5
+            done
+
+            if [[ "$found_checks" != true ]]; then
+              echo "No required checks appeared for $PR_URL" >&2
+              exit 1
+            fi
+
+            gh pr checks \
+              --repo "$GITHUB_REPOSITORY" \
+              --fail-fast \
+              --interval 10 \
+              --required \
+              --watch \
+              "$PR_URL"
+
+            refresh_pr "$PR_URL"
+            if [[ "$PR_HEAD_OID" != "$expected_head" ]] ||
+              [[ "$PR_BASE_OID" != "$BASE_OID" ]]; then
+              echo "The pull request changed while checks were running" >&2
+              exit 1
+            fi
+            validate_branch "$PR_HEAD_OID"
+            if ! git merge-base --is-ancestor "$BASE_OID" FETCH_HEAD; then
+              echo "The pull request branch is no longer up to date" >&2
+              exit 1
+            fi
+
+            gh pr merge \
+              --repo "$GITHUB_REPOSITORY" \
+              --match-head-commit "$PR_HEAD_OID" \
+              --squash \
+              "$PR_URL"
+          }
+
+          auth_header=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git config --local http.https://github.com/.extraheader \
+            "AUTHORIZATION: basic $auth_header"
+          trap 'git config --local --unset-all http.https://github.com/.extraheader || true' EXIT
+
+          existing_pr=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --app "$APP_SLUG" \
+            --base master \
+            --head "$BRANCH" \
+            --state all \
+            --limit 1 \
+            --json "$PR_FIELDS" \
+            --jq '.[0] // empty')
+
+          if [[ -n "$existing_pr" ]]; then
+            validate_pr "$existing_pr"
+            if [[ "$PR_STATE" == OPEN ]]; then
+              ensure_current_branch
+              merge_after_checks
+            else
+              echo "An update PR for this exact content was already $PR_STATE: $PR_URL"
+            fi
+            exit 0
+          fi
+
+          remote_head=$(git ls-remote --heads origin "refs/heads/$BRANCH" |
+            awk 'NR == 1 { print $1 }')
+          if [[ -n "$remote_head" ]]; then
+            validate_branch "$remote_head"
+          else
+            git config user.name "$APP_BOT"
+            git config user.email "$APP_BOT@users.noreply.github.com"
+            git switch -c "$BRANCH"
+            git add Dockerfile
+            git commit -m "update nginx to $NGINX_VERSION"
+            git push --set-upstream origin "$BRANCH"
+          fi
+
+          pr_url=$(gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base master \
+            --head "$BRANCH" \
+            --title "Update nginx to $NGINX_VERSION" \
+            --body "Automated nginx base image, source checksum, and build dependency update.")
+          refresh_pr "$pr_url"
+          ensure_current_branch
+          merge_after_checks

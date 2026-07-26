@@ -2,7 +2,7 @@
 set -eu
 
 IMAGE=${1:?Usage: tests/smoke.sh IMAGE}
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 CONTAINER="nginx-with-modules-smoke-$$"
 
 cleanup() {
@@ -28,7 +28,8 @@ RESPONSE=
 ATTEMPT=0
 
 while [ "$ATTEMPT" -lt 20 ]; do
-  if RESPONSE=$(curl --fail --silent --show-error "http://127.0.0.1:$PORT/"); then
+  if RESPONSE=$(curl --connect-timeout 2 --max-time 5 --fail --silent \
+    --show-error "http://127.0.0.1:$PORT/" 2>/dev/null); then
     break
   fi
   ATTEMPT=$((ATTEMPT + 1))
@@ -41,4 +42,8 @@ if [ "$RESPONSE" != "$EXPECTED" ]; then
   exit 1
 fi
 
-curl --fail --silent --show-error "http://127.0.0.1:$PORT/hmac" >/dev/null
+if ! curl --connect-timeout 2 --max-time 5 --fail --silent --show-error \
+  "http://127.0.0.1:$PORT/hmac" >/dev/null; then
+  docker logs "$CONTAINER"
+  exit 1
+fi

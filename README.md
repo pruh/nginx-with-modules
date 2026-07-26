@@ -75,16 +75,18 @@ filesystem and its version metadata; the updater does not independently verify
 image signatures. The corresponding nginx source archive is independently
 verified with the official release keys before its checksum is updated.
 
-The updater uses a GitHub App so its pull requests trigger the normal validation
-workflow. Configure the repository with:
+The updater uses the workflow's short-lived `GITHUB_TOKEN`. It opens each pull
+request against a temporary base branch, explicitly dispatches Docker validation
+on the exact update commit, and retargets the validated PR to `master`. This
+avoids the approval-required PR run that GitHub creates for bot-authored PRs
+while preserving the required validation result. After merging, it explicitly
+dispatches the release workflow because token-authored pushes do not start new
+workflow runs. Daily runs also retry a missing or failed release dispatch for
+the current `master` revision. Configure the repository with:
 
-- A GitHub App installed only on this repository, with `Actions: Read`,
-  `Checks: Read`, `Commit statuses: Read`, `Contents: Read and write`, and
-  `Pull requests: Read and write` permissions.
-- Repository variable `NGINX_UPDATE_APP_CLIENT_ID` containing the App client ID.
-- Repository secret `NGINX_UPDATE_APP_PRIVATE_KEY` containing its private key.
+- Actions workflow permissions set to `Read and write`.
+- `Allow GitHub Actions to create and approve pull requests` enabled.
 - A `master` ruleset requiring pull requests, branches to be up to date, and
   the Docker `validate` job.
 
-The dedicated App identity keeps update pull requests separate from the
-workflow's default `GITHUB_TOKEN` and ensures they run the normal PR checks.
+No persistent updater credential or repository secret is required.

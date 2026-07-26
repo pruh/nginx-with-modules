@@ -65,6 +65,7 @@ RUN rm /etc/nginx/conf.d/default.conf
 RUN sed -i '1s/^/# Load dynamic modules\n/' /etc/nginx/nginx.conf
 RUN sed -i '2s/^/load_module \/etc\/nginx\/modules\/ndk_http_module.so;\n/' /etc/nginx/nginx.conf
 RUN sed -i '3s/^/load_module \/etc\/nginx\/modules\/ngx_http_set_misc_module.so;\n/' /etc/nginx/nginx.conf
+RUN nginx -t
 
 EXPOSE 80
 STOPSIGNAL SIGTERM

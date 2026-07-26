@@ -29,7 +29,12 @@ jobs:
         uses: docker/build-push-action@v3.2.0
         with:
           context: .
+          load: true
           push: false
+          tags: nginx-with-modules:test
+
+      - name: Smoke test image
+        run: tests/smoke.sh nginx-with-modules:test
 
   publish:
     if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'

@@ -1,64 +1,67 @@
 name: Docker
 
 on:
-  schedule:
-    - cron: '0 1 * * *'
-  
   pull_request:
-    branches: [ "master" ]
-    
+    branches: ["master"]
+    paths:
+      - Dockerfile
+      - .github/workflows/docker-publish.yml
+      - tests/**
+  push:
+    branches: ["master"]
+    paths:
+      - Dockerfile
+      - .github/workflows/docker-publish.yml
+      - tests/**
+  workflow_dispatch:
+
 env:
-  BASE_IMAGE: library/nginx
-  IMAGE_TAG: alpine
   IMAGE_NAME: pruh/nginx-with-modules
 
 jobs:
-
-  build:
+  validate:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-
     steps:
-
       - uses: actions/checkout@v3
 
-      - name: Check if update available
-        id: check
-        uses: lucacome/docker-image-update-checker@v1
+      - name: Build image
+        uses: docker/build-push-action@v3.2.0
         with:
-          base-image: ${{ env.BASE_IMAGE }}:${{ env.IMAGE_TAG }}
-          image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          context: .
+          push: false
 
-      # only execute subsequent steps if an update is actually NEEDED.
-      # unfortunately we need to add an if-condition to all steps now
-      # because a clean exit can't be triggered within a job it seems
-      # (a cancellation is NOT the same and triggers a failure email)
-      # see also https://github.com/actions/runner/issues/662
+  publish:
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
 
-      - name: Get base image latest version
+      - name: Get pinned nginx version
         id: version
-        run: | 
-              echo nginx_version=$(curl -L --fail "https://hub.docker.com/v2/repositories/${{ env.BASE_IMAGE }}/tags/?page_size=100" | 
-                jq '.results | .[]? | .name' -r |
-                grep -Po "(\d+\.)+\d+(-${{ env.IMAGE_TAG }})" |
-                sed 's/-alpine//' |
-                sort --version-sort |
-                tail -n 1) >> $GITHUB_OUTPUT
-        if: steps.check.outputs.needs-updating == 'true'
+        shell: bash
+        run: |
+          image="$(sed -n 's/^ARG NGINX_IMAGE=//p' Dockerfile)"
+          version="${image#nginx:}"
+          version="${version%%-alpine@*}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Unable to determine nginx version from NGINX_IMAGE" >&2
+            exit 1
+          fi
+          echo "nginx_version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Login to DockerHub
+      - name: Login to Docker Hub
         uses: docker/login-action@v2.1.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-        if: steps.check.outputs.needs-updating == 'true'
 
-      - name: Build and push Docker images
+      - name: Build and push Docker image
         uses: docker/build-push-action@v3.2.0
         with:
-          context: "${{ github.workspace }}"
+          context: .
           push: true
           tags: |
             ${{ env.IMAGE_NAME }}:latest
-            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-            ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.nginx_version }}-${{ env.IMAGE_TAG }}
-        if: steps.check.outputs.needs-updating == 'true'
+            ${{ env.IMAGE_NAME }}:alpine
+            ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.nginx_version }}-alpine

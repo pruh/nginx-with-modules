@@ -68,5 +68,5 @@ RUN sed -i '3s/^/load_module \/etc\/nginx\/modules\/ngx_http_set_misc_module.so;
 RUN nginx -t
 
 EXPOSE 80
-STOPSIGNAL SIGTERM
+STOPSIGNAL SIGQUIT
 CMD ["nginx", "-g", "daemon off;"]

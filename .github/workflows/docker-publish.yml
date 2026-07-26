@@ -1,64 +1,209 @@
 name: Docker
 
 on:
-  schedule:
-    - cron: '0 1 * * *'
-  
   pull_request:
-    branches: [ "master" ]
-    
+    branches: ["master"]
+  push:
+    branches: ["master"]
+  workflow_dispatch:
+
 env:
-  BASE_IMAGE: library/nginx
-  IMAGE_TAG: alpine
   IMAGE_NAME: pruh/nginx-with-modules
 
+permissions:
+  contents: read
+
 jobs:
-
-  build:
+  validate:
     runs-on: ubuntu-latest
-
+    concurrency:
+      group: docker-validate-${{ github.ref }}
+      cancel-in-progress: true
     steps:
-
-      - uses: actions/checkout@v3
-
-      - name: Check if update available
-        id: check
-        uses: lucacome/docker-image-update-checker@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          base-image: ${{ env.BASE_IMAGE }}:${{ env.IMAGE_TAG }}
-          image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          persist-credentials: false
 
-      # only execute subsequent steps if an update is actually NEEDED.
-      # unfortunately we need to add an if-condition to all steps now
-      # because a clean exit can't be triggered within a job it seems
-      # (a cancellation is NOT the same and triggers a failure email)
-      # see also https://github.com/actions/runner/issues/662
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+        with:
+          image: tonistiigi/binfmt@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
 
-      - name: Get base image latest version
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        with:
+          driver-opts: image=moby/buildkit@sha256:2f5adac4ecd194d9f8c10b7b5d7bceb5186853db1b26e5abd3a657af0b7e26ec
+
+      - name: Build image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          cache-from: type=gha,scope=validation
+          cache-to: type=gha,mode=max,scope=validation
+          context: .
+          load: true
+          platforms: linux/amd64
+          pull: true
+          push: false
+          tags: nginx-with-modules:test
+
+      - name: Smoke test image
+        run: tests/smoke.sh nginx-with-modules:test
+
+      - name: Scan image for critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          exit-code: 1
+          ignore-unfixed: true
+          image-ref: nginx-with-modules:test
+          scanners: vuln
+          severity: CRITICAL
+
+      - name: Build arm64 image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          cache-from: type=gha,scope=validation-arm64
+          cache-to: type=gha,mode=max,scope=validation-arm64
+          context: .
+          load: true
+          platforms: linux/arm64
+          pull: true
+          push: false
+          tags: nginx-with-modules:test-arm64
+
+      - name: Smoke test arm64 image
+        run: tests/smoke.sh nginx-with-modules:test-arm64
+
+      - name: Scan arm64 image for critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          exit-code: 1
+          ignore-unfixed: true
+          image-ref: nginx-with-modules:test-arm64
+          scanners: vuln
+          severity: CRITICAL
+
+  publish:
+    needs: validate
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: docker-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+        with:
+          image: tonistiigi/binfmt@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        with:
+          driver-opts: image=moby/buildkit@sha256:2f5adac4ecd194d9f8c10b7b5d7bceb5186853db1b26e5abd3a657af0b7e26ec
+
+      - name: Get pinned nginx version
         id: version
-        run: | 
-              echo nginx_version=$(curl -L --fail "https://hub.docker.com/v2/repositories/${{ env.BASE_IMAGE }}/tags/?page_size=100" | 
-                jq '.results | .[]? | .name' -r |
-                grep -Po "(\d+\.)+\d+(-${{ env.IMAGE_TAG }})" |
-                sed 's/-alpine//' |
-                sort --version-sort |
-                tail -n 1) >> $GITHUB_OUTPUT
-        if: steps.check.outputs.needs-updating == 'true'
+        shell: bash
+        run: |
+          image="$(sed -n 's/^ARG NGINX_IMAGE=//p' Dockerfile)"
+          version="${image#nginx:}"
+          version="${version%%-alpine*}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Unable to determine nginx version from NGINX_IMAGE" >&2
+            exit 1
+          fi
+          echo "nginx_version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Login to DockerHub
-        uses: docker/login-action@v2.1.0
+      - name: Login to Docker Hub
+        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4.5.1
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-        if: steps.check.outputs.needs-updating == 'true'
 
-      - name: Build and push Docker images
-        uses: docker/build-push-action@v3.2.0
+      - name: Build and push amd64 image by digest
+        id: publish-amd64
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
-          context: "${{ github.workspace }}"
-          push: true
-          tags: |
-            ${{ env.IMAGE_NAME }}:latest
-            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-            ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.nginx_version }}-${{ env.IMAGE_TAG }}
-        if: steps.check.outputs.needs-updating == 'true'
+          cache-from: type=gha,scope=publish-amd64
+          cache-to: type=gha,mode=max,scope=publish-amd64
+          context: .
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.version.outputs.nginx_version }}-alpine
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          platforms: linux/amd64
+          provenance: mode=max
+          pull: true
+          sbom: generator=docker/buildkit-syft-scanner@sha256:79e7b013cbec16bbb436f312819a49a4a57752b2270c1a9332ae1a10fcc82a68
+
+      - name: Load published amd64 image
+        env:
+          DIGEST: ${{ steps.publish-amd64.outputs.digest }}
+        run: |
+          docker pull --platform linux/amd64 "$IMAGE_NAME@$DIGEST"
+          docker tag "$IMAGE_NAME@$DIGEST" nginx-with-modules:publish-amd64
+
+      - name: Smoke test published amd64 image
+        run: tests/smoke.sh nginx-with-modules:publish-amd64
+
+      - name: Scan published amd64 image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          exit-code: 1
+          ignore-unfixed: true
+          image-ref: nginx-with-modules:publish-amd64
+          scanners: vuln
+          severity: CRITICAL
+
+      - name: Build and push arm64 image by digest
+        id: publish-arm64
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          cache-from: type=gha,scope=publish-arm64
+          cache-to: type=gha,mode=max,scope=publish-arm64
+          context: .
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.version.outputs.nginx_version }}-alpine
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          platforms: linux/arm64
+          provenance: mode=max
+          pull: true
+          sbom: generator=docker/buildkit-syft-scanner@sha256:79e7b013cbec16bbb436f312819a49a4a57752b2270c1a9332ae1a10fcc82a68
+
+      - name: Load published arm64 image
+        env:
+          DIGEST: ${{ steps.publish-arm64.outputs.digest }}
+        run: |
+          docker pull --platform linux/arm64 "$IMAGE_NAME@$DIGEST"
+          docker tag "$IMAGE_NAME@$DIGEST" nginx-with-modules:publish-arm64
+
+      - name: Smoke test published arm64 image
+        run: tests/smoke.sh nginx-with-modules:publish-arm64
+
+      - name: Scan published arm64 image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          exit-code: 1
+          ignore-unfixed: true
+          image-ref: nginx-with-modules:publish-arm64
+          scanners: vuln
+          severity: CRITICAL
+
+      - name: Publish multi-architecture tags
+        env:
+          AMD64_DIGEST: ${{ steps.publish-amd64.outputs.digest }}
+          ARM64_DIGEST: ${{ steps.publish-arm64.outputs.digest }}
+          NGINX_VERSION: ${{ steps.version.outputs.nginx_version }}
+        run: |
+          docker buildx imagetools create \
+            --tag "$IMAGE_NAME:latest" \
+            --tag "$IMAGE_NAME:alpine" \
+            --tag "$IMAGE_NAME:$NGINX_VERSION-alpine" \
+            "$IMAGE_NAME@$AMD64_DIGEST" \
+            "$IMAGE_NAME@$ARM64_DIGEST"

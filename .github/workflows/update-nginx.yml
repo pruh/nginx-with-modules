@@ -10,7 +10,7 @@ permissions:
   checks: read
   contents: write
   pull-requests: write
-  statuses: read
+  statuses: write
 
 concurrency:
   group: update-nginx
@@ -234,6 +234,15 @@ jobs:
                   --exit-status \
                   --interval 10 \
                   "$run_id"
+                gh api \
+                  --method POST \
+                  -H "Accept: application/vnd.github+json" \
+                  "repos/$GITHUB_REPOSITORY/statuses/$PR_HEAD_OID" \
+                  -f state=success \
+                  -f context=validate \
+                  -f description='Passed dispatched Docker validation' \
+                  -f "target_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$run_id" \
+                  >/dev/null
                 return
               fi
               sleep 5

@@ -23,6 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Docker Buildx
@@ -70,13 +71,15 @@ jobs:
           BASE_OID=$(git rev-parse HEAD)
           BASE_BRANCH="automation/nginx-base-${BASE_OID:0:12}"
           BOT_LOGIN='github-actions[bot]'
+          PR_AUTHOR='app/github-actions'
           PR_FIELDS=author,baseRefName,baseRefOid,files,headRefName,headRefOid,isCrossRepository,number,state,url
 
           validate_pr() {
             jq -e \
-              --arg bot_login "$BOT_LOGIN" \
+              --arg pr_author "$PR_AUTHOR" \
               --arg branch "$BRANCH" \
-              '.author.login == $bot_login and
+              '.author.is_bot == true and
+               .author.login == $pr_author and
                (.baseRefName == "master" or
                 (.baseRefName | test("^automation/nginx-base-[0-9a-f]{12}$"))) and
                .headRefName == $branch and

@@ -107,7 +107,7 @@ jobs:
 
             git fetch --no-tags origin "refs/heads/$BRANCH" || return 1
             fetched_head=$(git rev-parse FETCH_HEAD) || return 1
-            mapfile -t changed_files < <(git diff --name-only HEAD...FETCH_HEAD)
+            mapfile -t changed_files < <(git diff --name-only "$BASE_OID...FETCH_HEAD")
             [[ "$fetched_head" == "$expected_head" ]] &&
               (( ${#changed_files[@]} == 1 )) &&
               [[ "${changed_files[0]:-}" == Dockerfile ]] &&

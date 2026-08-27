@@ -66,7 +66,8 @@ jobs:
         env:
           BRANCH: ${{ steps.update.outputs.branch }}
           GH_TOKEN: ${{ github.token }}
-          NGINX_VERSION: ${{ steps.update.outputs.nginx_version }}
+          UPDATE_BODY: ${{ steps.update.outputs.update_body }}
+          UPDATE_TITLE: ${{ steps.update.outputs.update_title }}
         run: |
           BASE_OID=$(git rev-parse HEAD)
           BASE_BRANCH="automation/nginx-base-${BASE_OID:0:12}"
@@ -378,7 +379,7 @@ jobs:
             git config user.email "41898282+$BOT_LOGIN@users.noreply.github.com"
             git switch -c "$BRANCH"
             git add Dockerfile
-            git commit -m "update nginx to $NGINX_VERSION"
+            git commit -m "$UPDATE_TITLE"
             git push --set-upstream origin "$BRANCH"
           fi
 
@@ -386,8 +387,8 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --base "$BASE_BRANCH" \
             --head "$BRANCH" \
-            --title "Update nginx to $NGINX_VERSION" \
-            --body "Automated nginx base image, source checksum, and build dependency update.")
+            --title "$UPDATE_TITLE" \
+            --body "$UPDATE_BODY")
           refresh_pr "$pr_url"
           stage_pr
           ensure_current_branch

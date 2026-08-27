@@ -138,7 +138,23 @@ replace_exactly_once() {
   fi
 }
 
+current_image=$(awk '$1 == "ARG" && $2 ~ /^NGINX_IMAGE=/ { print $2 }' "$DOCKERFILE")
+if [[ ! "$current_image" =~ ^NGINX_IMAGE=nginx:([0-9]+\.[0-9]+\.[0-9]+)-alpine-slim@(sha256:[0-9a-f]{64})$ ]]; then
+  echo "Invalid current nginx image: $current_image" >&2
+  exit 1
+fi
+current_nginx_version=${BASH_REMATCH[1]}
+current_digest=${BASH_REMATCH[2]}
+
+current_source=$(awk '$1 == "ARG" && $2 ~ /^NGINX_SOURCE_SHA256=/ { print $2 }' "$DOCKERFILE")
+if [[ ! "$current_source" =~ ^NGINX_SOURCE_SHA256=([0-9a-f]{64})$ ]]; then
+  echo "Invalid current nginx source checksum: $current_source" >&2
+  exit 1
+fi
+current_source_sha256=${BASH_REMATCH[1]}
+
 declare -A package_versions=()
+declare -A current_package_versions=()
 while IFS='=' read -r package version; do
   package_versions["$package"]=$version
 done < <(
@@ -157,10 +173,18 @@ done < <(
 
 for package in "${BUILD_PACKAGES[@]}"; do
   version=${package_versions[$package]:-}
+  current_version=$(awk -v prefix="$package=" \
+    'index($1, prefix) == 1 { print substr($1, length(prefix) + 1) }' \
+    "$DOCKERFILE")
   if [[ ! "$version" =~ ^[0-9][0-9A-Za-z._+~-]*-r[0-9]+$ ]]; then
     echo "Invalid package version for $package: $version" >&2
     exit 1
   fi
+  if [[ ! "$current_version" =~ ^[0-9][0-9A-Za-z._+~-]*-r[0-9]+$ ]]; then
+    echo "Invalid current package version for $package: $current_version" >&2
+    exit 1
+  fi
+  current_package_versions["$package"]=$current_version
 
   expected_line="  ${package}=${version}"
   if [[ "$package" != "${BUILD_PACKAGES[-1]}" ]]; then
@@ -184,6 +208,58 @@ if ! git diff --quiet -- "$DOCKERFILE"; then
   changed=true
 fi
 
+declare -a change_details=()
+declare -a change_labels=()
+declare -a changed_packages=()
+
+if [[ "$current_nginx_version" != "$nginx_version" ]]; then
+  change_details+=("- \`nginx\`: \`$current_nginx_version\` -> \`$nginx_version\`")
+fi
+if [[ "$current_digest" != "$digest" ]]; then
+  change_labels+=("base image")
+  change_details+=("- nginx base digest: \`$current_digest\` -> \`$digest\`")
+fi
+if [[ "$current_source_sha256" != "$source_sha256" ]]; then
+  change_labels+=("source checksum")
+  change_details+=("- nginx source SHA-256: \`$current_source_sha256\` -> \`$source_sha256\`")
+fi
+for package in "${BUILD_PACKAGES[@]}"; do
+  current_version=${current_package_versions[$package]}
+  version=${package_versions[$package]}
+  if [[ "$current_version" != "$version" ]]; then
+    changed_packages+=("$package")
+    change_labels+=("$package")
+    change_details+=("- \`$package\`: \`$current_version\` -> \`$version\`")
+  fi
+done
+
+if [[ "$changed" == true ]] && (( ${#change_details[@]} == 0 )); then
+  echo "Dockerfile changed without a recognized pinned input update" >&2
+  exit 1
+fi
+
+if [[ "$changed" != true ]]; then
+  update_title="No pinned input updates for nginx $nginx_version"
+elif [[ "$current_nginx_version" != "$nginx_version" ]]; then
+  update_title="Update nginx to $nginx_version"
+elif (( ${#changed_packages[@]} == 1 && ${#change_labels[@]} == 1 )); then
+  package=${changed_packages[0]}
+  update_title="Update $package to ${package_versions[$package]}"
+elif (( ${#changed_packages[@]} > 0 && ${#changed_packages[@]} == ${#change_labels[@]} )); then
+  printf -v changed_names '%s, ' "${changed_packages[@]}"
+  update_title="Update build dependencies: ${changed_names%, }"
+else
+  printf -v changed_names '%s, ' "${change_labels[@]}"
+  update_title="Update nginx $nginx_version inputs: ${changed_names%, }"
+fi
+
+update_body='Automated update to pinned Dockerfile inputs.'
+if (( ${#change_details[@]} > 0 )); then
+  printf -v details '%s\n' "${change_details[@]}"
+  update_body+=$'\n\n'
+  update_body+=${details%$'\n'}
+fi
+
 content_sha=$(sha256sum "$DOCKERFILE")
 content_sha=${content_sha%% *}
 branch="automation/nginx-${nginx_version}-${content_sha:0:12}"
@@ -194,6 +270,10 @@ if [[ -n ${GITHUB_OUTPUT:-} ]]; then
     echo "branch=$branch"
     echo "changed=$changed"
     echo "nginx_version=$nginx_version"
+    echo "update_title=$update_title"
+    echo "update_body<<update-body-$content_sha"
+    echo "$update_body"
+    echo "update-body-$content_sha"
   } >> "$GITHUB_OUTPUT"
 fi
 
@@ -201,3 +281,4 @@ echo "nginx version: $nginx_version"
 echo "base digest: $digest"
 echo "source SHA-256: $source_sha256"
 echo "changed: $changed"
+echo "update title: $update_title"

@@ -30,7 +30,7 @@ RUN apk add --no-cache --virtual .build-deps \
   musl-dev=1.2.6-r2 \
   make=4.4.1-r4 \
   openssl-dev=3.5.8-r0 \
-  pcre2-dev=10.47-r1 \
+  pcre2-dev=10.48-r0 \
   zlib-dev=1.3.2-r0 \
   linux-headers=7.0.0-r1
 

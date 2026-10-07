@@ -31,7 +31,7 @@ RUN apk add --no-cache --virtual .build-deps \
   make=4.4.1-r4 \
   openssl-dev=3.5.9-r0 \
   pcre2-dev=10.49-r0 \
-  zlib-dev=1.3.2-r0 \
+  zlib-dev=1.3.2-r1 \
   linux-headers=7.0.0-r1
 
 RUN mkdir -p /usr/src/nginx /usr/src/ngx_devel_kit /usr/src/set-misc && \

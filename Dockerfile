@@ -1,4 +1,4 @@
-ARG NGINX_IMAGE=nginx:1.31.7-alpine-slim@sha256:ebd058041a732a2b2dc0b606e34572dd8e0034de6a4aa4d50d8c13a240ac6005
+ARG NGINX_IMAGE=nginx:1.31.8-alpine-slim@sha256:21b879af516e3db2304ed74fac51f9f058a619416c3600a21387fa7f7d6930d7
 ARG NGX_DEVEL_KIT_VERSION=0.3.4
 ARG SET_MISC_VERSION=0.34
 
@@ -6,7 +6,7 @@ FROM ${NGINX_IMAGE} AS builder
 
 SHELL ["/bin/ash", "-eo", "pipefail", "-c"]
 
-ARG NGINX_SOURCE_SHA256=89ea8a3dc171511f7325043b50e4c036248d9fad5feb7ec809c0b82d5df42c65
+ARG NGINX_SOURCE_SHA256=0652b760b3b772d2ec17b47c2fc15d9a95e6fe35cd5b877eadc1a62d9bc75af1
 ARG NGX_DEVEL_KIT_COMMIT=bd44d16302273052d6005d7bdb55f74e23813de3
 ARG NGX_DEVEL_KIT_SHA256=31963f6eb21c11991bd7b301bed0939570093f45c95ab947e4ac54da5855d4fd
 ARG SET_MISC_COMMIT=35365f29dcba9d2f8e9c2c15bd2a14e8a1446d7d
@@ -27,7 +27,7 @@ RUN wget -q "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz" -O nginx.
 # Match the dependencies used by the official nginx Alpine build.
 RUN apk add --no-cache --virtual .build-deps \
   gcc=15.2.0-r5 \
-  musl-dev=1.2.6-r2 \
+  musl-dev=1.2.6-r3 \
   make=4.4.1-r4 \
   openssl-dev=3.5.9-r0 \
   pcre2-dev=10.49-r0 \

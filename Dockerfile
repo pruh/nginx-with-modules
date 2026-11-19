@@ -1,4 +1,4 @@
-ARG NGINX_IMAGE=nginx:1.31.8-alpine-slim@sha256:4c734d33ee731135dc9f2349914a34551c920f4451fca8bb05bf5880eb9079e8
+ARG NGINX_IMAGE=nginx:1.31.9-alpine-slim@sha256:5bfced78d24d644270bedb0a9968697042e38d5c03fb6354603df025279c1cbe
 ARG NGX_DEVEL_KIT_VERSION=0.3.4
 ARG SET_MISC_VERSION=0.34
 
@@ -6,7 +6,7 @@ FROM ${NGINX_IMAGE} AS builder
 
 SHELL ["/bin/ash", "-eo", "pipefail", "-c"]
 
-ARG NGINX_SOURCE_SHA256=0652b760b3b772d2ec17b47c2fc15d9a95e6fe35cd5b877eadc1a62d9bc75af1
+ARG NGINX_SOURCE_SHA256=a11c5eeee2e257f4478f0e649f84b0040787d277d2d3e5233952aa6b6dcb80ad
 ARG NGX_DEVEL_KIT_COMMIT=bd44d16302273052d6005d7bdb55f74e23813de3
 ARG NGX_DEVEL_KIT_SHA256=31963f6eb21c11991bd7b301bed0939570093f45c95ab947e4ac54da5855d4fd
 ARG SET_MISC_COMMIT=35365f29dcba9d2f8e9c2c15bd2a14e8a1446d7d
@@ -29,7 +29,7 @@ RUN apk add --no-cache --virtual .build-deps \
   gcc=15.2.0-r5 \
   musl-dev=1.2.6-r3 \
   make=4.4.1-r4 \
-  openssl-dev=3.5.9-r0 \
+  openssl-dev=3.5.9-r1 \
   pcre2-dev=10.49-r0 \
   zlib-dev=1.4-r0 \
   linux-headers=7.0.0-r1
